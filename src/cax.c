@@ -9,14 +9,25 @@
 #include <termios.h>
 #include <unistd.h>
 
+/*** Define ***/
+
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 /*** Data***/
 
 struct termios originalTemios;
 
 /*** Terminal ***/
 
-
+// this kills the editor
 void die(const char *s ){
+
+    // clears the screens before exit
+    write(STDOUT_FILENO, "\x1b[2J" , 4);
+
+    // repositons the cursor before exit
+    write(STDOUT_FILENO, "\x1b[H" , 3);
+
     perror(s);
     exit(1);
 }
@@ -61,6 +72,66 @@ void enableRawMode()
         die("tcsetattr");
 }
 
+// This functions reads the key input 
+char editorReadKey(){
+    int nread;
+    char c;
+    while((nread = read(STDIN_FILENO, &c , 1)) != 1){
+
+        // if no input then die
+        if(nread == -1 && errno != EAGAIN)
+            die("read");
+
+    }
+    return c;
+}
+
+/*** Output ***/
+
+// Drawing ~ 
+void editorDrawRows(){
+    int y;
+    for (y = 0; y < 24; y++)
+    {
+        write(STDOUT_FILENO, "~\r\n" , 3);
+    }
+    
+}
+
+// This function clears the whole screen
+void editorRefreshScreen(){
+
+    // this escape sequence [2J clears the whole screen. meanwhile [0J clears only upto cursor  
+    write(STDOUT_FILENO, "\x1b[2J" , 4);
+
+    // this repostions the cursor
+    write(STDOUT_FILENO, "\x1b[H" , 3);
+
+    // draws ~ throughout after refreshing and repositions the cursor
+    editorDrawRows();
+    write(STDOUT_FILENO, "\x1b[H" , 3);
+}
+
+/*** Input ***/
+
+// This function processess the key input
+void editorProcessKeypress(){
+    char c = editorReadKey();
+
+    switch (c){
+        case CTRL_KEY('q'):
+
+            // clears screen before exit
+            write(STDOUT_FILENO , "\x1b[2J" , 4);
+            
+            // repositions cursor before exit
+            write(STDOUT_FILENO , "\x1b[H" , 3);
+            exit(0);
+            break;
+    }
+}
+
+
 /*** Init ***/
 
 int main()
@@ -72,16 +143,19 @@ int main()
     
     // while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q'){
     while (1){
-        char c = '\0';
-        if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-        if(iscntrl(c))
-            printf("%d\r\n" , c);
-        
-        else
-            printf("%d ('%c')\r\n", c, c);
 
-        if(c == 'q')
-            break;
+    //     char c = '\0';
+    //     if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
+    //     if(iscntrl(c))
+    //         printf("%d\r\n" , c);
+    //     else
+    //         printf("%d ('%c')\r\n", c, c);
+    //     if(c == CTRL_KEY('q')) 
+    //         break;
+
+        editorRefreshScreen();
+        editorProcessKeypress();
+
     }
     
     return 0;
