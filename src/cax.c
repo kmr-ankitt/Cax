@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -139,14 +140,48 @@ int getWindowSize(int *rows , int *cols){
   }
 }
 
+/*** Append Buffer ***/
+
+struct abuf {
+  char *b;
+  int len;
+};
+
+// This is the constructor for our append buffer
+#define ABUF_INIT {NULL, 0}
+
+void abAppend(struct abuf * ab, const char *s , int len){
+
+  // this will reallcoate the buffer space according to the input
+  char *new = realloc(ab->b, ab->len + len);
+
+  if(new == NULL)
+    return ;
+
+  // we used memcpy to the append the new input in prev input
+  memcpy(&new[ab->len], s , len);
+  ab->b = new;
+  ab->len +=len;
+}
+
+// this will free the buffer space
+void abFree(struct abuf *ab){
+  free(ab->b);
+}
+
 /*** Output ***/
 
 // Drawing ~ 
-void editorDrawRows(){
+void editorDrawRows( struct abuf *ab){
     int y;
     for (y = 0; y < E.screenRows; y++)
     {
-        write(STDOUT_FILENO, "~\r\n" , 3);
+      abAppend(ab, "~" , 1);
+      
+     // drawing last line  
+      if(y < E.screenRows - 1){
+        abAppend(ab, "\r\n" , 2);      
+      }
     }
     
 }
@@ -154,15 +189,19 @@ void editorDrawRows(){
 // This function clears the whole screen
 void editorRefreshScreen(){
 
+    struct abuf ab = ABUF_INIT;
     // this escape sequence [2J clears the whole screen. meanwhile [0J clears only upto cursor  
-    write(STDOUT_FILENO, "\x1b[2J" , 4);
+    abAppend(&ab, "\x1b[2J" , 4);
 
     // this repostions the cursor
-    write(STDOUT_FILENO, "\x1b[H" , 3);
+    abAppend(&ab , "\x1b[H" , 3);
 
     // draws ~ throughout after refreshing and repositions the cursor
-    editorDrawRows();
-    write(STDOUT_FILENO, "\x1b[H" , 3);
+    editorDrawRows(&ab);
+    abAppend(&ab, "\x1b[H" , 3);
+    
+    write(STDOUT_FILENO , ab.b , ab.len);
+    abFree(&ab);
 }
 
 /*** Input ***/
