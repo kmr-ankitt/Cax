@@ -13,11 +13,21 @@
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define CAX_VERSION "0.01"
+
+enum editorKey{
+  ARROW_LEFT = 1000 , 
+  ARROW_RIGHT , 
+  ARROW_UP ,
+  ARROW_DOWN 
+};
+
 /*** Data***/
 
 /* Here we are configuring the terminal window */
 struct editorConfig
 {
+  // We will keep track of mouse cursor using x and y coordinates
+  int cx, cy;
   int screenRows;
   int screenCols;
   struct termios originalTemios;
@@ -83,7 +93,7 @@ void enableRawMode()
 }
 
 // This functions reads the key input
-char editorReadKey()
+int editorReadKey()
 {
   int nread;
   char c;
@@ -94,7 +104,33 @@ char editorReadKey()
     if (nread == -1 && errno != EAGAIN)
       die("read");
   }
-  return c;
+
+  if(c == '\x1b'){
+    char seq[3];
+
+    if(read(STDIN_FILENO , &seq[0], 1) != 1)
+      return '\x1b';
+    if(read(STDIN_FILENO , &seq[1], 1) != 1)
+      return '\x1b';
+
+    if(seq[0] == '['){
+      switch (seq[1]) {
+        case 'A' : 
+          return ARROW_UP;
+        case 'B' :
+          return ARROW_DOWN;
+        case 'c':
+          return ARROW_RIGHT;
+        case 'd':
+          return ARROW_LEFT;
+      }
+    }
+
+    return '\x1b';
+  }
+  else{
+    return c;
+  }
 }
 
 int getCursorPosition(int *rows, int *cols)
@@ -237,7 +273,11 @@ void editorRefreshScreen()
 
   // draws ~ throughout after refreshing and repositions the cursor
   editorDrawRows(&ab);
-  abAppend(&ab, "\x1b[H", 3);
+
+  char buf[32];
+  snprintf(buf, sizeof(buf) , "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  abAppend(&ab, buf , strlen(buf));
+
   abAppend(&ab, "\x1b[?25h", 6);
 
   write(STDOUT_FILENO, ab.b, ab.len);
@@ -246,10 +286,43 @@ void editorRefreshScreen()
 
 /*** Input ***/
 
+void editorMoveCursor(int key){
+  switch (key) {
+
+    // left
+    case ARROW_LEFT:
+      if(E.cx != 0){
+        E.cx--;
+      }
+      break;
+   
+    // right
+    case ARROW_RIGHT:
+      if(E.cx != E.screenCols - 1){
+        E.cx++;
+      }
+      break;
+
+    // up
+    case ARROW_UP:
+      if(E.cy != 0){
+        E.cy--;
+      }
+      break;
+
+    // down
+    case ARROW_DOWN:
+      if(E.cy != E.screenRows - 1){
+        E.cy++;
+      }
+      break;
+  }
+}
+
 // This function processess the key input
 void editorProcessKeypress()
 {
-  char c = editorReadKey();
+  int c = editorReadKey();
 
   switch (c)
   {
@@ -262,6 +335,13 @@ void editorProcessKeypress()
     write(STDOUT_FILENO, "\x1b[H", 3);
     exit(0);
     break;
+
+  case ARROW_UP:
+  case ARROW_DOWN:
+  case ARROW_LEFT:
+  case ARROW_RIGHT:
+    editorMoveCursor(c);
+    break;
   }
 }
 
@@ -269,6 +349,9 @@ void editorProcessKeypress()
 
 void initEditor()
 {
+  E.cx = 0;
+  E.cy = 0;
+
   if (getWindowSize(&E.screenRows, &E.screenCols) == -1)
     die("getWindowSize");
 }
