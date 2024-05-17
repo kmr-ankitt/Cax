@@ -45,6 +45,7 @@ struct editorConfig
   // We will keep track of mouse cursor using x and y coordinates
   int cx, cy;
   int rowoff;
+  int coloff;
   int screenRows;
   int screenCols;
   int numrows;
@@ -314,12 +315,21 @@ void abFree(struct abuf *ab)
 
 /*** Output ***/
 
+
+// Vertical and horizontal scroll impelemented here 
 void editorScroll() {
   if (E.cy < E.rowoff) {
     E.rowoff = E.cy;
   }
   if (E.cy >= E.rowoff + E.screenRows) {
     E.rowoff = E.cy - E.screenRows + 1;
+  }
+  
+  if (E.cx < E.coloff) {
+    E.coloff = E.cx;
+  }
+  if (E.cx >= E.coloff + E.screenCols) {
+    E.coloff = E.cx - E.screenCols + 1;
   }
 }
 
@@ -354,10 +364,12 @@ void editorDrawRows(struct abuf *ab)
         abAppend(ab, "~", 1);
       }
     } else {
-      int len = E.row[filerow].size;
+      int len = E.row[filerow].size - E.coloff;
+      if(len<0)
+        len = 0;
       if(len > E.screenCols) 
         len = E.screenCols;
-      abAppend(ab , E.row[filerow].chars , len);
+      abAppend(ab , &E.row[filerow].chars[E.coloff] , len);
 
     } 
     // Clears each line as we withdraw them
@@ -389,7 +401,7 @@ void editorRefreshScreen()
   editorDrawRows(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.cx - E.coloff) + 1);
   abAppend(&ab, buf , strlen(buf));
 
   abAppend(&ab, "\x1b[?25h", 6);
@@ -401,6 +413,8 @@ void editorRefreshScreen()
 /*** Input ***/
 
 void editorMoveCursor(int key){
+
+  erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
   switch (key) {
 
     // left
@@ -412,7 +426,7 @@ void editorMoveCursor(int key){
    
     // right
     case ARROW_RIGHT:
-      if(E.cx != E.screenCols - 1){
+      if (row && E.cx < row->size) {
         E.cx++;
       }
       break;
