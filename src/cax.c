@@ -1,5 +1,10 @@
 /*** Headerfiles ***/
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
@@ -28,6 +33,12 @@ enum editorKey{
 
 /*** Data***/
 
+// It stores a row of text
+typedef struct erow{
+  int size;
+  char *chars;
+}erow;
+
 /* Here we are configuring the terminal window */
 struct editorConfig
 {
@@ -35,6 +46,8 @@ struct editorConfig
   int cx, cy;
   int screenRows;
   int screenCols;
+  int numrows;
+  erow *row;
   struct termios originalTemios;
 };
 
@@ -223,6 +236,51 @@ int getWindowSize(int *rows, int *cols)
   }
 }
 
+/*** Row operations ***/
+
+
+void editorAppendRow(char *s, size_t len) {
+
+  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+  int at = E.numrows;
+  E.row[at].size = len;
+  E.row[at].chars = malloc(len + 1);
+  memcpy(E.row[at].chars, s, len);
+  E.row[at].chars[len] = '\0';
+  E.numrows++;
+
+}
+
+
+/*** File I/O ***/
+
+void editorOpen(char *filename){
+  FILE *fp = fopen(filename , "r");
+  if(!fp) 
+    die("fopen");
+
+  char *line = NULL;
+  size_t linecap = 0;
+  ssize_t linelen;
+  linelen = getline(&line , &linecap , fp);
+
+  while((linelen = getline(&line , &linecap , fp)) != -1){
+    while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+    { 
+      linelen--;
+      editorAppendRow(line , linelen);
+    } 
+    E.row->size = linelen;
+    E.row->chars = malloc(linelen + 1);
+    memcpy(E.row->chars, line, linelen);
+    E.row->chars[linelen] = '\0';
+    E.numrows = 1;
+  }
+  free(line);
+  fclose(fp);                                        
+}
+
+
 /*** Append Buffer ***/
 
 struct abuf
@@ -268,27 +326,34 @@ void editorDrawRows(struct abuf *ab)
   {
 
     // Name printing
-    if(y == E.screenRows/3){
-      char welcome[80];
-      int welcomelen = snprintf(welcome , sizeof(welcome), "Cax editor --version %s", CAX_VERSION);
-      if(welcomelen > E.screenCols)
-          welcomelen = E.screenCols;
+    if(y >= E.numrows){
+      if(E.screenRows == 0 && y == E.screenRows / 3){
+        char welcome[80];
+        int welcomelen = snprintf(welcome , sizeof(welcome), "Cax editor --version %s", CAX_VERSION);
+        if(welcomelen > E.screenCols)
+            welcomelen = E.screenCols;
 
-      // centering the welcome message
-      // for which we divided the screen width by 2 and subtract string length 
-      int padding = (E.screenCols - welcomelen) / 2;
-      if(padding){
-        abAppend(ab , "~" , 1);
-        padding--;
+        // centering the welcome message
+        // for which we divided the screen width by 2 and subtract string length 
+        int padding = (E.screenCols - welcomelen) / 2;
+        if(padding){
+          abAppend(ab , "~" , 1);
+          padding--;
+        }
+        while(padding--)
+          abAppend(ab , " ", 1);
+
+        abAppend(ab , welcome , welcomelen);
+      }else {
+        abAppend(ab, "~", 1);
       }
-      while(padding--)
-        abAppend(ab , " ", 1);
+    } else {
+      int len = E.row[y].size;
+      if(len > E.screenCols) 
+        len = E.screenCols;
+      abAppend(ab , E.row[y].chars , len);
 
-      abAppend(ab , welcome , welcomelen);
-    }else {
-      abAppend(ab, "~", 1);
-    }
-   
+    } 
     // Clears each line as we withdraw them
     abAppend(ab , "\x1b[K" , 3 );
     // drawing last line
@@ -408,30 +473,23 @@ void initEditor()
 {
   E.cx = 0;
   E.cy = 0;
+  E.numrows = 0;
+  E.row = NULL;
 
   if (getWindowSize(&E.screenRows, &E.screenCols) == -1)
     die("getWindowSize");
 }
 
-int main()
+int main(int argc , char * argv[])
 {
   enableRawMode();
   initEditor();
-  // read() returns the number of bytes that it read, and will return 0 when it reaches the end of a file.
-  // program quits when 'q' is pressed
+  if(argc >= 2){
+    editorOpen(argv[1]);
+  }
 
-  // while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q'){
   while (1)
   {
-
-    //     char c = '\0';
-    //     if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-    //     if(iscntrl(c))
-    //         printf("%d\r\n" , c);
-    //     else
-    //         printf("%d ('%c')\r\n", c, c);
-    //     if(c == CTRL_KEY('q'))
-    //         break;
 
     editorRefreshScreen();
     editorProcessKeypress();
