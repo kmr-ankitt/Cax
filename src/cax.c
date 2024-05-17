@@ -44,6 +44,7 @@ struct editorConfig
 {
   // We will keep track of mouse cursor using x and y coordinates
   int cx, cy;
+  int rowoff;
   int screenRows;
   int screenCols;
   int numrows;
@@ -270,11 +271,6 @@ void editorOpen(char *filename){
       linelen--;
       editorAppendRow(line , linelen);
     } 
-    E.row->size = linelen;
-    E.row->chars = malloc(linelen + 1);
-    memcpy(E.row->chars, line, linelen);
-    E.row->chars[linelen] = '\0';
-    E.numrows = 1;
   }
   free(line);
   fclose(fp);                                        
@@ -318,6 +314,15 @@ void abFree(struct abuf *ab)
 
 /*** Output ***/
 
+void editorScroll() {
+  if (E.cy < E.rowoff) {
+    E.rowoff = E.cy;
+  }
+  if (E.cy >= E.rowoff + E.screenRows) {
+    E.rowoff = E.cy - E.screenRows + 1;
+  }
+}
+
 // Drawing ~
 void editorDrawRows(struct abuf *ab)
 {
@@ -326,8 +331,9 @@ void editorDrawRows(struct abuf *ab)
   {
 
     // Name printing
-    if(y >= E.numrows){
-      if(E.screenRows == 0 && y == E.screenRows / 3){
+    int filerow = y + E.rowoff;
+    if(filerow>= E.numrows){
+      if(E.numrows == 0 && y == E.screenRows / 3){
         char welcome[80];
         int welcomelen = snprintf(welcome , sizeof(welcome), "Cax editor --version %s", CAX_VERSION);
         if(welcomelen > E.screenCols)
@@ -348,10 +354,10 @@ void editorDrawRows(struct abuf *ab)
         abAppend(ab, "~", 1);
       }
     } else {
-      int len = E.row[y].size;
+      int len = E.row[filerow].size;
       if(len > E.screenCols) 
         len = E.screenCols;
-      abAppend(ab , E.row[y].chars , len);
+      abAppend(ab , E.row[filerow].chars , len);
 
     } 
     // Clears each line as we withdraw them
@@ -368,20 +374,22 @@ void editorDrawRows(struct abuf *ab)
 void editorRefreshScreen()
 {
 
+  editorScroll();
+  
   struct abuf ab = ABUF_INIT;
 
   abAppend(&ab, "\x1b[?25l", 6);
 
   // abAppend(&ab, "\x1b[2J", 4);
 
-  // this repostions the cursor
+  // this repostions the cursfilerowr
   abAppend(&ab, "\x1b[H", 3);
 
   // draws ~ throughout after refreshing and repositions the cursor
   editorDrawRows(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf) , "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
   abAppend(&ab, buf , strlen(buf));
 
   abAppend(&ab, "\x1b[?25h", 6);
@@ -418,7 +426,7 @@ void editorMoveCursor(int key){
 
     // down
     case ARROW_DOWN:
-      if(E.cy != E.screenRows - 1){
+      if(E.cy < E.numrows){
         E.cy++;
       }
       break;
@@ -473,6 +481,7 @@ void initEditor()
 {
   E.cx = 0;
   E.cy = 0;
+  E.rowoff = 0;
   E.numrows = 0;
   E.row = NULL;
 
