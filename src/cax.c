@@ -625,13 +625,22 @@ void editorDrawRows(struct abuf *ab)
         len = 0;
       if(len > E.screenCols) 
         len = E.screenCols;
-      abAppend(ab , &E.row[filerow].render[E.coloff] , len);
-
-    } 
+      char *c = &E.row[filerow].render[E.coloff];
+      int j;
+      for (j = 0; j < len; j++) {
+        if (isdigit(c[j])) {
+          abAppend(ab, "\x1b[31m", 5);
+          abAppend(ab, &c[j], 1);
+          abAppend(ab, "\x1b[39m", 5);
+        } else {
+          abAppend(ab, &c[j], 1);
+        }
+      }
+    }
     // Clears each line as we withdraw them
     abAppend(ab , "\x1b[K" , 3 );
     // drawing last line
-      abAppend(ab, "\r\n", 2);
+    abAppend(ab, "\r\n", 2);
   }
 }
 
