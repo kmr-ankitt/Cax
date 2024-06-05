@@ -1,1 +1,1 @@
-alias cax = 'make && ./cax'
+alias cax='make && ./cax'
