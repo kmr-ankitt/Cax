@@ -57,6 +57,10 @@ make
   ./cax FILE_DIRECTORY
   ```
 
---- 
 ## Screenshots
+
+![image](https://github.com/kmr-ankitt/Cax/assets/90329779/7a5da0ea-59f7-44a5-873f-c21a289ec6cf)
+
+![image-1](https://github.com/kmr-ankitt/Cax/assets/90329779/b81d3611-5a14-48c7-ba0a-5e5d714564de)
+
 
