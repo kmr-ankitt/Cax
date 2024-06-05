@@ -1,0 +1,1 @@
+alias cax = 'make && ./cax'
